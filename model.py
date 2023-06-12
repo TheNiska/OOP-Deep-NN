@@ -3,10 +3,14 @@ import math
 
 
 class FeedForwardNN():
-    def __init__(self, layers=(100, 10, 1)):
+    def __init__(self, X=None, Y=None, layers=(100, 10, 1)):
+        self.X = X
+        self.Y = Y
+        self.m = X.shape[1]
+        self.layers_num = len(layers)
         self.parameters = {}
 
-        for i in range(1, len(layers)):
+        for i in range(1, self.layers_num):
             w = (np.random.randn(layers[i], layers[i-1])
                  * math.sqrt(1 / layers[i-1]))
             b = np.zeros((layers[i], 1))
@@ -28,10 +32,9 @@ class FeedForwardNN():
         return z, a
 
     def all_forward(self, a0):
-        layers_num = len(self.parameters) // 2
         a = a0
 
-        for i in range(1, layers_num):
+        for i in range(1, self.layers_num - 1):
             z, a = self.forward_step(a,
                                      self.parameters['w'+str(i)],
                                      self.parameters['b'+str(i)],
@@ -40,19 +43,28 @@ class FeedForwardNN():
             self.cache['a'+str(i)] = a
 
         z, a = self.forward_step(a,
-                                 self.parameters['w'+str(layers_num)],
-                                 self.parameters['b'+str(layers_num)],
+                                 self.parameters['w'+str(self.layers_num-1)],
+                                 self.parameters['b'+str(self.layers_num-1)],
                                  'sigmoid')
-        self.cache['z'+str(layers_num)] = z
-        self.cache['a'+str(layers_num)] = a
+        self.cache['z'+str(self.layers_num-1)] = z
+        self.cache['a'+str(self.layers_num-1)] = a
+
+    def compute_cost(self):
+        y_hat = self.cache['a'+str(self.layers_num-1)]
+        cost = ((-1 / self.m) * (np.dot(self.Y, np.log(y_hat).T)
+                                 + np.dot((1 - Y), np.log(1 - y_hat).T)))
+        print(cost)
 
 
 with np.load('mnist_data.npz') as data:
     X = data['X']
     Y = data['Y']
 
-net = FeedForwardNN((784, 32, 16, 8, 4, 1))
+INPUT_SIZE, M = X.shape
+
+net = FeedForwardNN(X=X, Y=Y, layers=(INPUT_SIZE, 20, 10, 1))
 net.all_forward(X)
+net.compute_cost()
 
 for key in net.parameters:
     print(f"{key} :: {net.parameters[key].shape}")
