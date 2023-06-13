@@ -4,10 +4,11 @@ import math
 
 class FeedForwardNN():
 
-    def __init__(self, X, Y, layers=(100, 10, 1)):
+    def __init__(self, X, Y, layers=(100, 10, 1), bath=1000):
         self.X = X
         self.Y = Y
         self.m = X.shape[1]
+        self.bath = bath
         self.layers = (X.shape[0], *layers)
         self.layers_num = len(self.layers)
         self.parameters = {}
@@ -20,7 +21,7 @@ class FeedForwardNN():
         for i in range(1, self.layers_num):
             w = np.random.randn(self.layers[i], self.layers[i-1]) \
                                     * math.sqrt(1 / self.layers[i-1])
-            b = np.zeros((self.layers[i], 1))
+            b = np.random.randn(self.layers[i], 1)
 
             print(f"w{i}_shape = {w.shape}")
             print(f"b{i}_shape = {b.shape}")
@@ -44,14 +45,14 @@ class FeedForwardNN():
         return z, a
 
     def all_forward(self):
-        a = self.X
+        a = self.cache['a0']
 
         # Forward prop for all layers except the last ------------------------
         for i in range(1, self.layers_num - 1):
             z, a = self.forward_step(a,
                                      self.parameters['w'+str(i)],
                                      self.parameters['b'+str(i)],
-                                     'relu')
+                                     'tanh')
             self.cache['z'+str(i)] = z
             self.cache['a'+str(i)] = a
         # --------------------------------------------------------------------
@@ -112,14 +113,18 @@ class FeedForwardNN():
             self.parameters['b'+str(i)] -= ALPHA * self.grads['db'+str(i)]
 
 
+# load data
+# assert that X.shape = (nX, m)
 with np.load('mnist_data.npz') as data:
     X = data['X']
     Y = data['Y']
 
+# initialize an instance of neural network
 net = FeedForwardNN(X, Y, layers=(20, 10, 1))
 
-for i in range(10):
+# run iterations
+for i in range(20):
     net.all_forward()
     net.compute_cost()
     net.all_backward()
-    net.update_parameters()
+    net.update_parameters(ALPHA=0.05)
