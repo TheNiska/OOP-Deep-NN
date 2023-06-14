@@ -3,8 +3,9 @@ import math
 
 
 class FeedForwardNN():
-
-    def __init__(self, X, Y, layers=(100, 10, 1), bath=1000):
+    # params: dict[str, ndarray] = dict['w1': w1, 'w2': w2, ...]
+    # layers: tuple of int
+    def __init__(self, X, Y, layers=(100, 10, 1), bath=1000, params=None):
         self.X = X
         self.Y = Y
         self.m = X.shape[1]
@@ -17,18 +18,22 @@ class FeedForwardNN():
 
         np.random.seed(3)
 
-        # initializing and print parameters ----------------------------------
-        for i in range(1, self.layers_num):
-            w = np.random.randn(self.layers[i], self.layers[i-1]) \
-                                    * math.sqrt(1 / self.layers[i-1])
-            b = np.random.randn(self.layers[i], 1)
+        if not params:
+            # initializing and print parameters ------------------------------
+            for i in range(1, self.layers_num):
+                w = np.random.randn(self.layers[i], self.layers[i-1]) \
+                                        * math.sqrt(1 / self.layers[i-1])
+                b = np.random.randn(self.layers[i], 1)
 
-            print(f"w{i}_shape = {w.shape}")
-            print(f"b{i}_shape = {b.shape}")
+                print(f"w{i}_shape = {w.shape}")
+                print(f"b{i}_shape = {b.shape}")
 
-            self.parameters['w'+str(i)] = w
-            self.parameters['b'+str(i)] = b
-        # --------------------------------------------------------------------
+                self.parameters['w'+str(i)] = w
+                self.parameters['b'+str(i)] = b
+            # ----------------------------------------------------------------
+        else:
+            # get parameters from user
+            self.parameters = params
 
     def forward_step(self, prev_A, w, b, activation):
         z = np.dot(w, prev_A) + b
@@ -66,10 +71,13 @@ class FeedForwardNN():
         self.cache['a'+str(self.layers_num-1)] = a
         # --------------------------------------------------------------------
 
+    def print_prediction(self):
+        print('Probability: ', self.cache['a'+str(self.layers_num-1)])
+
     def compute_cost(self):
         y_hat = self.cache['a'+str(self.layers_num-1)]
         cost = (-1 / self.m) * (np.dot(self.Y, np.log(y_hat).T)
-                                + np.dot((1 - Y), np.log(1 - y_hat).T))
+                                + np.dot((1 - self.Y), np.log(1 - y_hat).T))
         print(cost)
 
     def backward_step(self, da, activation, layer_i):
@@ -113,18 +121,19 @@ class FeedForwardNN():
             self.parameters['b'+str(i)] -= ALPHA * self.grads['db'+str(i)]
 
 
-# load data
-# assert that X.shape = (nX, m)
-with np.load('mnist_data.npz') as data:
-    X = data['X']
-    Y = data['Y']
+if __name__ == '__main__':
+    # load data
+    # assert that X.shape = (nX, m)
+    with np.load('mnist_data.npz') as data:
+        X = data['X']
+        Y = data['Y']
 
-# initialize an instance of neural network
-net = FeedForwardNN(X, Y, layers=(20, 10, 1))
+    # initialize an instance of neural network
+    net = FeedForwardNN(X, Y, layers=(20, 10, 1))
 
-# run iterations
-for i in range(20):
-    net.all_forward()
-    net.compute_cost()
-    net.all_backward()
-    net.update_parameters(ALPHA=0.05)
+    # run iterations
+    for i in range(20):
+        net.all_forward()
+        net.compute_cost()
+        net.all_backward()
+        net.update_parameters(ALPHA=0.05)

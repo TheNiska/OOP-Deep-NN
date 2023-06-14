@@ -1,3 +1,7 @@
 mnist_data.npz
 venv/
+parameters_cd.npz
+*.jpg
+*.jpeg
+__pycache__/
 
