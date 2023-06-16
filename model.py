@@ -18,6 +18,8 @@ class FeedForwardNN():
 
         np.random.seed(3)
 
+        info_str = "Model settings"
+        print(f"----{info_str:-<36}")
         if not params:
             # initializing and print parameters ------------------------------
             for i in range(1, self.layers_num):
@@ -26,7 +28,6 @@ class FeedForwardNN():
                 b = np.random.randn(self.layers[i], 1)
 
                 print(f"w{i}_shape = {w.shape}")
-                print(f"b{i}_shape = {b.shape}")
 
                 self.parameters['w'+str(i)] = w
                 self.parameters['b'+str(i)] = b
@@ -34,6 +35,7 @@ class FeedForwardNN():
         else:
             # get parameters from user
             self.parameters = params
+        print('--'*20)
 
     # set-up of drop-out regularization
     def set_dropout(self, layer_i, keep_prob):
@@ -86,9 +88,6 @@ class FeedForwardNN():
         self.cache['a'+str(self.layers_num-1)] = a
         # --------------------------------------------------------------------
 
-    def print_prediction(self):
-        print('Probability: ', self.cache['a'+str(self.layers_num-1)])
-
     def compute_cost(self):
         y_hat = self.cache['a'+str(self.layers_num-1)]
         cost = (-1 / self.m) * (np.dot(self.Y, np.log(y_hat).T)
@@ -135,6 +134,21 @@ class FeedForwardNN():
             self.parameters['w'+str(i)] -= ALPHA * self.grads['dw'+str(i)]
             self.parameters['b'+str(i)] -= ALPHA * self.grads['db'+str(i)]
 
+    def predict(self, X_test, Y_test):
+        print('--'*20)
+        self.cache['a0'] = X_test
+        self.Y = Y_test
+        self.m = X_test.shape[1]
+        self.all_forward()
+        print('Test cost: ', end='')
+        self.compute_cost()
+
+        predictions = self.cache['a'+str(self.layers_num-1)] > 0.5
+        correct = np.sum(predictions == self.Y)
+        accuracy = correct / self.Y.shape[1] * 100
+        print('Model accuracy: ', '%.2f' % accuracy, ' %')
+        print('--'*20)
+
 
 if __name__ == '__main__':
     # load data
@@ -143,13 +157,27 @@ if __name__ == '__main__':
         X = data['X']
         Y = data['Y']
 
+    m_train = X.shape[1] - round(0.15 * X.shape[1])
+
+    X_train = X[:, :m_train]
+    Y_train = Y[:, :m_train]
+
+    X_test = X[:, m_train:]
+    Y_test = Y[:, m_train:]
+
     # initialize an instance of neural network
-    net = FeedForwardNN(X, Y, layers=(20, 10, 1))
-    net.set_dropout(1, 0.7)
+    net = FeedForwardNN(X_train, Y_train, layers=(16, 10, 8, 1))
+    # net.set_dropout(1, 0.85)
+    # net.set_dropout(2, 0.95)
 
     # run iterations
-    for i in range(10):
+    for i in range(1, 11):
+        currect_alpha = 0.5 / i
+        print(f"epoch {i}: ", end='')
         net.all_forward()
         net.compute_cost()
         net.all_backward()
-        net.update_parameters(ALPHA=0.02)
+        net.update_parameters(ALPHA=currect_alpha)
+
+    # test neural network
+    net.predict(X_test, Y_test)
