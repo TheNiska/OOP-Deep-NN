@@ -6,15 +6,15 @@ class FeedForwardNN():
     # params: dict[str, ndarray] = dict['w1': w1, 'w2': w2, ...]
     # layers: tuple of int
     def __init__(self, X, Y, layers=(100, 10, 1), bath=1000, params=None):
-        self.X = X
+        self.cache = {'a0': X}
         self.Y = Y
         self.m = X.shape[1]
         self.bath = bath
         self.layers = (X.shape[0], *layers)
         self.layers_num = len(self.layers)
         self.parameters = {}
-        self.cache = {'a0': self.X}
         self.grads = {}
+        self.dropout_layers = {}
 
         np.random.seed(3)
 
@@ -35,9 +35,14 @@ class FeedForwardNN():
             # get parameters from user
             self.parameters = params
 
-    def forward_step(self, prev_A, w, b, activation):
+    # set-up of drop-out regularization
+    def set_dropout(self, layer_i, keep_prob):
+        self.dropout_layers[layer_i] = keep_prob
+
+    def forward_step(self, prev_A, w, b, activation='relu', dropout=None):
         z = np.dot(w, prev_A) + b
 
+        # calculating activation ---------------------------------------------
         if activation == 'sigmoid':
             a = 1 / (1 + np.exp(-z))
         elif activation == 'relu':
@@ -46,6 +51,15 @@ class FeedForwardNN():
             a = np.tanh(z)
         else:
             a = z
+        # --------------------------------------------------------------------
+
+        # drop-out regularization --------------------------------------------
+        if dropout:
+            keep_prob = dropout
+            drop = np.random.rand(*a.shape) < keep_prob
+            a *= drop
+            a /= keep_prob
+        # --------------------------------------------------------------------
 
         return z, a
 
@@ -57,7 +71,8 @@ class FeedForwardNN():
             z, a = self.forward_step(a,
                                      self.parameters['w'+str(i)],
                                      self.parameters['b'+str(i)],
-                                     'tanh')
+                                     activation='tanh',
+                                     dropout=self.dropout_layers.get(i))
             self.cache['z'+str(i)] = z
             self.cache['a'+str(i)] = a
         # --------------------------------------------------------------------
@@ -66,7 +81,7 @@ class FeedForwardNN():
         z, a = self.forward_step(a,
                                  self.parameters['w'+str(self.layers_num-1)],
                                  self.parameters['b'+str(self.layers_num-1)],
-                                 'sigmoid')
+                                 activation='sigmoid')
         self.cache['z'+str(self.layers_num-1)] = z
         self.cache['a'+str(self.layers_num-1)] = a
         # --------------------------------------------------------------------
@@ -130,10 +145,11 @@ if __name__ == '__main__':
 
     # initialize an instance of neural network
     net = FeedForwardNN(X, Y, layers=(20, 10, 1))
+    net.set_dropout(1, 0.7)
 
     # run iterations
-    for i in range(20):
+    for i in range(10):
         net.all_forward()
         net.compute_cost()
         net.all_backward()
-        net.update_parameters(ALPHA=0.05)
+        net.update_parameters(ALPHA=0.02)
