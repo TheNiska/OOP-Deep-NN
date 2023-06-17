@@ -41,7 +41,7 @@ class FeedForwardNN():
     def set_dropout(self, layer_i, keep_prob):
         self.dropout_layers[layer_i] = keep_prob
 
-    def forward_step(self, prev_A, w, b, activation='relu', dropout=None):
+    def forward_step(self, prev_A, w, b, current_layer, activation='relu'):
         z = np.dot(w, prev_A) + b
 
         # calculating activation ---------------------------------------------
@@ -56,11 +56,13 @@ class FeedForwardNN():
         # --------------------------------------------------------------------
 
         # drop-out regularization --------------------------------------------
-        if dropout:
-            keep_prob = dropout
-            drop = np.random.rand(*a.shape) < keep_prob
-            a *= drop
+        keep_prob = self.dropout_layers.get(current_layer)
+        if keep_prob:
+            drop_mask = np.random.rand(*a.shape) < keep_prob
+            a *= drop_mask
             a /= keep_prob
+
+            self.cache['drop_mask_'+str(current_layer)] = drop_mask
         # --------------------------------------------------------------------
 
         return z, a
@@ -73,8 +75,8 @@ class FeedForwardNN():
             z, a = self.forward_step(a,
                                      self.parameters['w'+str(i)],
                                      self.parameters['b'+str(i)],
-                                     activation='tanh',
-                                     dropout=self.dropout_layers.get(i))
+                                     i,
+                                     activation='relu')
             self.cache['z'+str(i)] = z
             self.cache['a'+str(i)] = a
         # --------------------------------------------------------------------
@@ -83,6 +85,7 @@ class FeedForwardNN():
         z, a = self.forward_step(a,
                                  self.parameters['w'+str(self.layers_num-1)],
                                  self.parameters['b'+str(self.layers_num-1)],
+                                 self.layers_num - 1,
                                  activation='sigmoid')
         self.cache['z'+str(self.layers_num-1)] = z
         self.cache['a'+str(self.layers_num-1)] = a
@@ -94,10 +97,10 @@ class FeedForwardNN():
                                 + np.dot((1 - self.Y), np.log(1 - y_hat).T))
         print(cost)
 
-    def backward_step(self, da, activation, layer_i):
-        z = self.cache['z'+str(layer_i)]
-        a = self.cache['a'+str(layer_i)]
-        a_prev = self.cache['a'+str(layer_i-1)]
+    def backward_step(self, da, activation, current_layer):
+        z = self.cache['z'+str(current_layer)]
+        a = self.cache['a'+str(current_layer)]
+        a_prev = self.cache['a'+str(current_layer-1)]
 
         if activation == 'relu':
             dz = np.array(da, copy=True)
@@ -107,13 +110,24 @@ class FeedForwardNN():
         elif activation == 'sigmoid':
             dz = da * a * (1 - a)
 
-        self.grads['dw'+str(layer_i)] = (1 / self.m) * np.dot(dz, a_prev.T)
-        self.grads['db'+str(layer_i)] = (1 / self.m) * np.sum(dz, axis=1,
-                                                              keepdims=True)
+        self.grads['dw'+str(current_layer)] = ((1 / self.m)
+                                               * np.dot(dz, a_prev.T))
+
+        self.grads['db'+str(current_layer)] = ((1 / self.m)
+                                               * np.sum(dz, axis=1,
+                                                        keepdims=True))
 
         # don't need to calculate da for the first layer (for a0 = X)
-        if layer_i != 1:
-            da_prev = np.dot(self.parameters['w'+str(layer_i)].T, dz)
+        if current_layer != 1:
+            # this calculates da of layer[current_layer-1]
+            da_prev = np.dot(self.parameters['w'+str(current_layer)].T, dz)
+
+            # backward prop drop-out -----------------------------------------
+            keep_prob = self.dropout_layers.get(current_layer - 1)
+            if keep_prob:
+                da_prev *= self.cache['drop_mask_'+str(current_layer - 1)]
+                da_prev /= keep_prob
+            # ----------------------------------------------------------------
         else:
             da_prev = None
 
@@ -126,7 +140,7 @@ class FeedForwardNN():
         # First and the others steps of back propagation ---------------------
         da_prev = self.backward_step(da_l, 'sigmoid', self.layers_num-1)
         for i in reversed(range(1, self.layers_num-1)):
-            da_prev = self.backward_step(da_prev, 'tanh', i)
+            da_prev = self.backward_step(da_prev, 'relu', i)
         # --------------------------------------------------------------------
 
     def update_parameters(self, ALPHA=0.01):
@@ -167,12 +181,12 @@ if __name__ == '__main__':
 
     # initialize an instance of neural network
     net = FeedForwardNN(X_train, Y_train, layers=(16, 10, 8, 1))
-    # net.set_dropout(1, 0.85)
+    net.set_dropout(1, 0.75)
     # net.set_dropout(2, 0.95)
 
     # run iterations
-    for i in range(1, 11):
-        currect_alpha = 0.5 / i
+    for i in range(1, 21):
+        currect_alpha = 0.3 / i
         print(f"epoch {i}: ", end='')
         net.all_forward()
         net.compute_cost()
