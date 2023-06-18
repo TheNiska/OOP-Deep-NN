@@ -43,13 +43,11 @@ class FeedForwardNN():
     # set-up of drop-out regularization
     def set_dropout(self, layer_i, keep_prob):
         self.dropout_layers[layer_i] = keep_prob
-        print('--'*20)
         print('Drop-out is set')
         print('--'*20)
 
     def set_activations(self, func_name_1, func_name_2):
         self.activations = (func_name_1, func_name_2)
-        print('--'*20)
         print('Activations is set')
         print('--'*20)
 
@@ -164,7 +162,6 @@ class FeedForwardNN():
             self.parameters['b'+str(i)] -= ALPHA * self.grads['db'+str(i)]
 
     def predict(self, X_test, Y_test):
-        print('--'*20)
         self.cache['a0'] = X_test
         self.Y = Y_test
         self.m = X_test.shape[1]
@@ -176,6 +173,12 @@ class FeedForwardNN():
         correct = np.sum(predictions == self.Y)
         accuracy = correct / self.Y.shape[1] * 100
         print('Model accuracy: ', '%.2f' % accuracy, ' %')
+        print('--'*20)
+
+    def show_probability(self):
+        self.all_forward()
+        prediction = self.cache['a'+str(self.layers_num-1)]
+        return prediction[0, 0]
         print('--'*20)
 
     def visualize_params(self, path):
