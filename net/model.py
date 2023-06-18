@@ -1,11 +1,12 @@
 import numpy as np
 import math
+from PIL import Image
 
 
 class FeedForwardNN():
     # params: dict[str, ndarray] = dict['w1': w1, 'w2': w2, ...]
     # layers: tuple of int
-    def __init__(self, X, Y, layers=(100, 10, 1), bath=1000, params=None):
+    def __init__(self, X, Y, layers=(10, 5, 1), bath=None, params=None):
         self.cache = {'a0': X}
         self.Y = Y
         self.m = X.shape[1]
@@ -15,6 +16,7 @@ class FeedForwardNN():
         self.parameters = {}
         self.grads = {}
         self.dropout_layers = {}
+        self.activations = ('relu', 'sigmoid')
 
         np.random.seed(3)
 
@@ -35,13 +37,23 @@ class FeedForwardNN():
         else:
             # get parameters from user
             self.parameters = params
+        print(self.layers)
         print('--'*20)
 
     # set-up of drop-out regularization
     def set_dropout(self, layer_i, keep_prob):
         self.dropout_layers[layer_i] = keep_prob
+        print('--'*20)
+        print('Drop-out is set')
+        print('--'*20)
 
-    def forward_step(self, prev_A, w, b, current_layer, activation='relu'):
+    def set_activations(self, func_name_1, func_name_2):
+        self.activations = (func_name_1, func_name_2)
+        print('--'*20)
+        print('Activations is set')
+        print('--'*20)
+
+    def forward_step(self, prev_A, w, b, current_layer, activation):
         z = np.dot(w, prev_A) + b
 
         # calculating activation ---------------------------------------------
@@ -76,7 +88,7 @@ class FeedForwardNN():
                                      self.parameters['w'+str(i)],
                                      self.parameters['b'+str(i)],
                                      i,
-                                     activation='relu')
+                                     self.activations[0])
             self.cache['z'+str(i)] = z
             self.cache['a'+str(i)] = a
         # --------------------------------------------------------------------
@@ -86,7 +98,7 @@ class FeedForwardNN():
                                  self.parameters['w'+str(self.layers_num-1)],
                                  self.parameters['b'+str(self.layers_num-1)],
                                  self.layers_num - 1,
-                                 activation='sigmoid')
+                                 self.activations[1])
         self.cache['z'+str(self.layers_num-1)] = z
         self.cache['a'+str(self.layers_num-1)] = a
         # --------------------------------------------------------------------
@@ -138,9 +150,12 @@ class FeedForwardNN():
         da_l = - (np.divide(self.Y, y_hat)) + np.divide(1 - self.Y, 1 - y_hat)
 
         # First and the others steps of back propagation ---------------------
-        da_prev = self.backward_step(da_l, 'sigmoid', self.layers_num-1)
+        da_prev = self.backward_step(da_l,
+                                     self.activations[1],
+                                     self.layers_num-1)
+
         for i in reversed(range(1, self.layers_num-1)):
-            da_prev = self.backward_step(da_prev, 'relu', i)
+            da_prev = self.backward_step(da_prev, self.activations[0], i)
         # --------------------------------------------------------------------
 
     def update_parameters(self, ALPHA=0.01):
@@ -163,35 +178,19 @@ class FeedForwardNN():
         print('Model accuracy: ', '%.2f' % accuracy, ' %')
         print('--'*20)
 
+    def visualize_params(self, path):
+        w = self.parameters['w1']
+        mn = np.amin(w)
+        w = w - mn
+        mx = np.amax(w)  # 0 .. mx
+        w = w * (255 / mx)  # 0 .. 255
 
-if __name__ == '__main__':
-    # load data
-    # assert that X.shape = (nX, m)
-    with np.load('mnist_data.npz') as data:
-        X = data['X']
-        Y = data['Y']
+        for i in range(w.shape[0]):
+            arr = w[i, :].reshape(28, 28)
+            arr = np.array(arr, dtype='uint8')
+            img = Image.fromarray(arr)
+            img = img.resize((196, 196))
+            img.save(f"{path}{i}.png")
 
-    m_train = X.shape[1] - round(0.15 * X.shape[1])
-
-    X_train = X[:, :m_train]
-    Y_train = Y[:, :m_train]
-
-    X_test = X[:, m_train:]
-    Y_test = Y[:, m_train:]
-
-    # initialize an instance of neural network
-    net = FeedForwardNN(X_train, Y_train, layers=(16, 10, 8, 1))
-    net.set_dropout(1, 0.75)
-    # net.set_dropout(2, 0.95)
-
-    # run iterations
-    for i in range(1, 21):
-        currect_alpha = 0.3 / i
-        print(f"epoch {i}: ", end='')
-        net.all_forward()
-        net.compute_cost()
-        net.all_backward()
-        net.update_parameters(ALPHA=currect_alpha)
-
-    # test neural network
-    net.predict(X_test, Y_test)
+    def save_params(self, fname):
+        np.savez(fname, **self.parameters)

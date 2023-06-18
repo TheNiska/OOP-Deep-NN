@@ -4,4 +4,8 @@ parameters_cd.npz
 *.jpg
 *.jpeg
 __pycache__/
+parameters/
+examples/*.npz
+examples/*.csv
+examples/__pycache__/
 
