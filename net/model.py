@@ -6,17 +6,21 @@ from PIL import Image
 class FeedForwardNN():
     # params: dict[str, ndarray] = dict['w1': w1, 'w2': w2, ...]
     # layers: tuple of int
-    def __init__(self, X, Y, layers=(10, 5, 1), bath=None, params=None):
+    def __init__(self, X, Y, layers=(10, 5, 1), batch=None, params=None):
+        self.batch = X.shape[1] if batch is None else batch
+        self.t = 0
+
         self.cache = {'a0': X}
         self.Y = Y
+
         self.m = X.shape[1]
-        self.bath = bath
         self.layers = (X.shape[0], *layers)
         self.layers_num = len(self.layers)
         self.parameters = {}
         self.grads = {}
         self.dropout_layers = {}
         self.activations = ('relu', 'sigmoid')
+        self.current_m = None
 
         np.random.seed(3)
 
@@ -77,10 +81,13 @@ class FeedForwardNN():
 
         return z, a
 
-    def all_forward(self):
-        a = self.cache['a0']
+    def batch_forward(self):
+        '''Getting a batch and calculating its length for the case when it's
+        the last batch and hence its length may be smaller the self.batch'''
+        a = self.cache['a0'][:, self.t:self.t+self.batch]
+        self.current_m = len(a[0])
 
-        # Forward prop for all layers except the last ------------------------
+        # Forward prop for all layers except the last --------------------
         for i in range(1, self.layers_num - 1):
             z, a = self.forward_step(a,
                                      self.parameters['w'+str(i)],
@@ -89,9 +96,9 @@ class FeedForwardNN():
                                      self.activations[0])
             self.cache['z'+str(i)] = z
             self.cache['a'+str(i)] = a
-        # --------------------------------------------------------------------
+        # ----------------------------------------------------------------
 
-        # Last layer forward prop --------------------------------------------
+        # Last layer forward prop ----------------------------------------
         z, a = self.forward_step(a,
                                  self.parameters['w'+str(self.layers_num-1)],
                                  self.parameters['b'+str(self.layers_num-1)],
@@ -99,18 +106,28 @@ class FeedForwardNN():
                                  self.activations[1])
         self.cache['z'+str(self.layers_num-1)] = z
         self.cache['a'+str(self.layers_num-1)] = a
-        # --------------------------------------------------------------------
+        # ----------------------------------------------------------------
 
-    def compute_cost(self):
+    def compute_batch_cost(self):
+        m = self.current_m
+        st = self.t
+        ed = self.t + m
+
         y_hat = self.cache['a'+str(self.layers_num-1)]
-        cost = (-1 / self.m) * (np.dot(self.Y, np.log(y_hat).T)
-                                + np.dot((1 - self.Y), np.log(1 - y_hat).T))
-        print(cost)
+
+        cost = (-1 / m) * (np.dot(self.Y[:, st:ed], np.log(y_hat).T)
+                           + np.dot((1 - self.Y[:, st:ed]),
+                                    np.log(1 - y_hat).T))
+        return cost
 
     def backward_step(self, da, activation, current_layer):
         z = self.cache['z'+str(current_layer)]
         a = self.cache['a'+str(current_layer)]
-        a_prev = self.cache['a'+str(current_layer-1)]
+
+        if current_layer != 1:
+            a_prev = self.cache['a'+str(current_layer-1)]
+        else:
+            a_prev = self.cache['a0'][:, self.t:self.t+self.current_m]
 
         if activation == 'relu':
             dz = np.array(da, copy=True)
@@ -120,10 +137,10 @@ class FeedForwardNN():
         elif activation == 'sigmoid':
             dz = da * a * (1 - a)
 
-        self.grads['dw'+str(current_layer)] = ((1 / self.m)
+        self.grads['dw'+str(current_layer)] = ((1 / self.current_m)
                                                * np.dot(dz, a_prev.T))
 
-        self.grads['db'+str(current_layer)] = ((1 / self.m)
+        self.grads['db'+str(current_layer)] = ((1 / self.current_m)
                                                * np.sum(dz, axis=1,
                                                         keepdims=True))
 
@@ -143,9 +160,13 @@ class FeedForwardNN():
 
         return da_prev
 
-    def all_backward(self):
+    def batch_backward(self):
+        st = self.t
+        ed = self.t + self.current_m
+
         y_hat = self.cache['a'+str(self.layers_num-1)]
-        da_l = - (np.divide(self.Y, y_hat)) + np.divide(1 - self.Y, 1 - y_hat)
+        da_l = (- (np.divide(self.Y[:, st:ed], y_hat)) +
+                np.divide(1 - self.Y[:, st:ed], 1 - y_hat))
 
         # First and the others steps of back propagation ---------------------
         da_prev = self.backward_step(da_l,
@@ -161,18 +182,49 @@ class FeedForwardNN():
             self.parameters['w'+str(i)] -= ALPHA * self.grads['dw'+str(i)]
             self.parameters['b'+str(i)] -= ALPHA * self.grads['db'+str(i)]
 
+    def full_circle(self, ALPHA=0.01):
+
+        batches_num = 0
+        cost_average = 0
+        while self.t < self.cache['a0'].shape[1]:
+            self.batch_forward()
+            # print(f"Current Batch: {self.t}:{self.t+self.current_m}")
+            batch_cost = self.compute_batch_cost()[0, 0]
+            self.batch_backward()
+            self.update_parameters(ALPHA=ALPHA)
+
+            self.t += self.batch
+            batches_num += 1
+            cost_average += batch_cost
+        self.t = 0
+
+        print(f"    Circle cost: {cost_average / batches_num}")
+
     def predict(self, X_test, Y_test):
         self.cache['a0'] = X_test
         self.Y = Y_test
         self.m = X_test.shape[1]
-        self.all_forward()
-        print('Test cost: ', end='')
-        self.compute_cost()
 
-        predictions = self.cache['a'+str(self.layers_num-1)] > 0.5
-        correct = np.sum(predictions == self.Y)
-        accuracy = correct / self.Y.shape[1] * 100
-        print('Model accuracy: ', '%.2f' % accuracy, ' %')
+        batches_num = 0
+        cost_average = 0
+        full_accuracy = 0
+        self.t = 0
+        while self.t < self.cache['a0'].shape[1]:
+            self.batch_forward()
+            batch_cost = self.compute_batch_cost()
+
+            predictions = self.cache['a'+str(self.layers_num-1)] > 0.5
+            correct = np.sum(predictions == self.Y[:, self.t:self.t+self.batch])
+            accuracy = correct / self.Y.shape[1] * 100
+            full_accuracy += accuracy
+
+            self.t += self.batch
+            batches_num += 1
+            cost_average += batch_cost
+
+        full_accuracy = full_accuracy / batches_num
+
+        print('Model accuracy: ', '%.2f' % full_accuracy, ' %')
         print('--'*20)
 
     def show_probability(self):

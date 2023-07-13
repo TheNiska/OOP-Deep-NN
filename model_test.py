@@ -26,19 +26,18 @@ print("Train shape: ", X_train.shape)
 print("Test shape: ", X_test.shape)
 
 # initialize an instance of neural network
-net = FeedForwardNN(X_train, Y_train, layers=(8, 4, 1))
+net = FeedForwardNN(X_train, Y_train, layers=(16, 8, 1), batch=2000)
 net.set_activations('relu', 'sigmoid')
 # net.set_dropout(1, 0.90)
 
+print(net.cache['a0'].shape)
+
 # run iterations
-for i in range(1, 151):
+for i in range(1, 201):
     print(f"epoch {i}: ", end='')
-    net.all_forward()
-    net.compute_cost()
-    net.all_backward()
-    net.update_parameters(ALPHA=0.04)
+    net.full_circle(ALPHA=0.01)
 
 # test neural network
 net.predict(X_train, Y_train)
 net.predict(X_test, Y_test)
-net.save_params(f"{parameters_path}mnist_params_{digit}")
+# net.save_params(f"{parameters_path}mnist_params_{digit}")
