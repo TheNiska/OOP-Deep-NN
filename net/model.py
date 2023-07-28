@@ -188,17 +188,15 @@ class FeedForwardNN():
         cost_average = 0
         while self.t < self.cache['a0'].shape[1]:
             self.batch_forward()
-            # print(f"Current Batch: {self.t}:{self.t+self.current_m}")
             batch_cost = self.compute_batch_cost()[0, 0]
             self.batch_backward()
             self.update_parameters(ALPHA=ALPHA)
-
             self.t += self.batch
             batches_num += 1
             cost_average += batch_cost
         self.t = 0
 
-        print(f"    Circle cost: {cost_average / batches_num}")
+        print(f"    Circle cost: {'%.5f' % (cost_average / batches_num)}")
 
     def predict(self, X_test, Y_test):
         self.cache['a0'] = X_test
@@ -207,45 +205,27 @@ class FeedForwardNN():
 
         batches_num = 0
         cost_average = 0
-        full_accuracy = 0
         self.t = 0
+        predictions = []
+
         while self.t < self.cache['a0'].shape[1]:
             self.batch_forward()
             batch_cost = self.compute_batch_cost()
-
-            predictions = self.cache['a'+str(self.layers_num-1)] > 0.5
-            correct = np.sum(predictions == self.Y[:, self.t:self.t+self.batch])
-            accuracy = correct / self.Y.shape[1] * 100
-            full_accuracy += accuracy
+            prediction = self.cache['a'+str(self.layers_num-1)] > 0.5
+            prediction = prediction.tolist()[0]
+            predictions.extend(prediction)
 
             self.t += self.batch
             batches_num += 1
             cost_average += batch_cost
 
-        full_accuracy = full_accuracy / batches_num
 
-        print('Model accuracy: ', '%.2f' % full_accuracy, ' %')
+        # print('Preditions length: ', len(predictions))
+        correct = np.sum(predictions == self.Y)
+        accuracy = correct / self.Y.shape[1] * 100
+
+        print('Model accuracy: ', '%.2f' % accuracy, ' %')
         print('--'*20)
-
-    def show_probability(self):
-        self.all_forward()
-        prediction = self.cache['a'+str(self.layers_num-1)]
-        return prediction[0, 0]
-        print('--'*20)
-
-    def visualize_params(self, path):
-        w = self.parameters['w1']
-        mn = np.amin(w)
-        w = w - mn
-        mx = np.amax(w)  # 0 .. mx
-        w = w * (255 / mx)  # 0 .. 255
-
-        for i in range(w.shape[0]):
-            arr = w[i, :].reshape(28, 28)
-            arr = np.array(arr, dtype='uint8')
-            img = Image.fromarray(arr)
-            img = img.resize((196, 196))
-            img.save(f"{path}{i}.png")
 
     def save_params(self, fname):
         np.savez(fname, **self.parameters)
