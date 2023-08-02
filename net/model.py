@@ -219,11 +219,10 @@ class FeedForwardNN():
             batches_num += 1
             cost_average += batch_cost
 
-
-        # print('Preditions length: ', len(predictions))
         correct = np.sum(predictions == self.Y)
         accuracy = correct / self.Y.shape[1] * 100
 
+        print('--'*20)
         print('Model accuracy: ', '%.2f' % accuracy, ' %')
         print('--'*20)
 

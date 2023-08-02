@@ -3,7 +3,7 @@ import numpy as np
 
 data_path = 'examples/'
 parameters_path = 'parameters/'
-digit = 1
+digit = 3
 
 with np.load(f"{data_path}mnist_digit_{digit}.npz") as data:
     X = data['X']
@@ -15,8 +15,10 @@ np.random.shuffle(X.T)
 np.random.seed(1)
 np.random.shuffle(Y.T)
 
+# percent of data for testing
+TEST_SIZE = 0.10
 
-m_train = X.shape[1] - round(0.97 * X.shape[1])
+m_train = X.shape[1] - round(TEST_SIZE * X.shape[1])
 
 X_train = X[:, :m_train]
 Y_train = Y[:, :m_train]
@@ -28,16 +30,16 @@ print("Train shape: ", X_train.shape)
 print("Test shape: ", X_test.shape)
 
 # initialize an instance of neural network
-net = FeedForwardNN(X_train, Y_train, layers=(32, 16, 1), batch=2000)
+net = FeedForwardNN(X_train, Y_train, layers=(64, 32, 16, 16, 8, 1), batch=2000)
 net.set_activations('tanh', 'sigmoid')
 # net.set_dropout(1, 0.90)
 
 print(net.cache['a0'].shape)
 
 # run iterations
-for i in range(1, 121):
+for i in range(1, 221):
     print(f"epoch {i: <4}: ", end='')
-    net.full_circle(ALPHA=0.02)
+    net.full_circle(ALPHA=0.04)
 
 # test neural network
 net.predict(X_train, Y_train)
